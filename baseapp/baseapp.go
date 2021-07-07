@@ -3,6 +3,7 @@ package baseapp
 import (
 	"errors"
 	"fmt"
+	"github.com/cosmos/cosmos-sdk/store/streaming"
 	"reflect"
 	"strings"
 
@@ -133,6 +134,7 @@ type BaseApp struct { // nolint: maligned
 	// indexEvents defines the set of events in the form {eventType}.{attributeKey},
 	// which informs Tendermint what to index. If empty, all events will be indexed.
 	indexEvents map[string]struct{}
+	hooks       []streaming.StreamingService
 }
 
 // NewBaseApp returns a reference to an initialized BaseApp. It accepts a
@@ -760,4 +762,15 @@ func (app *BaseApp) runMsgs(ctx sdk.Context, msgs []sdk.Msg, mode runTxMode) (*s
 		Log:    strings.TrimSpace(msgLogs.String()),
 		Events: events.ToABCIEvents(),
 	}, nil
+}
+
+// RegisterStreamingService is used to register a streaming service with the BaseApp
+func (app *BaseApp) RegisterHooks(s streaming.StreamingService) {
+	// set the listeners for each StoreKey
+	for key, lis := range s.Listeners() {
+		app.cms.AddListeners(key, lis)
+	}
+	// register the streaming service hooks within the BaseApp
+	// BaseApp will pass BeginBlock, DeliverTx, and EndBlock requests and responses to the streaming services to update their ABCI context using these hooks
+	app.hooks = append(app.hooks, s)
 }

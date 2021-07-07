@@ -19,7 +19,7 @@ type Hook interface {
 // StreamingService interface for registering WriteListeners with the BaseApp and updating the service with the ABCI messages using the hooks
 type StreamingService interface {
 	Stream(wg *sync.WaitGroup, quitChan <-chan struct{}) // streaming service loop, awaits kv pairs and writes them to some destination stream or file
-	Listeners() map[sdk.StoreKey]listen.WriteListener    // returns the streaming service's listeners for the BaseApp to register
+	Listeners() map[sdk.StoreKey][]listen.WriteListener  // returns the streaming service's listeners for the BaseApp to register
 	Hook
 }
 
@@ -44,13 +44,13 @@ func (iw *intermediateWriter) Write(b []byte) (int, error) {
 
 // FileStreamingService is a concrete implementation of StreamingService that writes state changes out to a file
 type FileStreamingService struct {
-	listeners  map[sdk.StoreKey]listen.WriteListener // the listeners that will be initialized with BaseApp
-	srcChan    <-chan []byte                         // the channel that all of the WriteListeners write their data out to
-	filePrefix string                                // optional prefix for each of the generated files
-	writeDir   string                                // directory to write files into
-	dstFile    *os.File                              // the current write output file
-	marshaller codec.BinaryCodec                     // marshaller used for re-marshalling the ABCI messages to write them out to the destination files
-	stateCache [][]byte                              // cache the protobuf binary encoded StoreKVPairs in the order they are received
+	listeners  map[sdk.StoreKey][]listen.WriteListener // the listeners that will be initialized with BaseApp
+	srcChan    <-chan []byte                           // the channel that all of the WriteListeners write their data out to
+	filePrefix string                                  // optional prefix for each of the generated files
+	writeDir   string                                  // directory to write files into
+	dstFile    *os.File                                // the current write output file
+	marshaller codec.BinaryCodec                       // marshaller used for re-marshalling the ABCI messages to write them out to the destination files
+	stateCache [][]byte                                // cache the protobuf binary encoded StoreKVPairs in the order they are received
 }
 
 func (fss *FileStreamingService) Stream(wg *sync.WaitGroup, quitChan <-chan struct{}) {
@@ -68,7 +68,7 @@ func (fss *FileStreamingService) Stream(wg *sync.WaitGroup, quitChan <-chan stru
 	}()
 }
 
-func (fss *FileStreamingService) Listeners() map[sdk.StoreKey]listen.WriteListener {
+func (fss *FileStreamingService) Listeners() map[sdk.StoreKey][]listen.WriteListener {
 	return fss.listeners
 }
 
@@ -112,10 +112,11 @@ func NewFileStreamingService(writeDir, filePrefix string, storeKeys []sdk.StoreK
 	listenChan := make(chan []byte, 0)
 	iw := NewIntermediateWriter(listenChan)
 	listener := listen.NewStoreKVPairWriteListener(iw, m)
-	listeners := make(map[sdk.StoreKey]listen.WriteListener, len(storeKeys))
+
+	listeners := make(map[sdk.StoreKey][]listen.WriteListener, len(storeKeys))
 	// in this case, we are using the same listener for each Store
 	for _, key := range storeKeys {
-		listeners[key] = listener
+		listeners[key] = []listen.WriteListener{listener}
 	}
 	//// check that the writeDir exists and is writeable so that we can catch the error here at initialization if it is not
 	//// we don't open a dstFile until we receive our first ABCI message

@@ -183,6 +183,11 @@ func (app *BaseApp) BeginBlock(req abci.RequestBeginBlock) (res abci.ResponseBeg
 	}
 	// set the signed validators for addition to context in deliverTx
 	app.voteInfos = req.LastCommitInfo.GetVotes()
+
+	// Call the streaming service hooks with the BeginBlock messages
+	for _, hook := range app.hooks {
+		hook.ListenBeginBlock(app.deliverState.ctx, req, res)
+	}
 	return res
 }
 
@@ -201,6 +206,11 @@ func (app *BaseApp) EndBlock(req abci.RequestEndBlock) (res abci.ResponseEndBloc
 
 	if cp := app.GetConsensusParams(app.deliverState.ctx); cp != nil {
 		res.ConsensusParamUpdates = cp
+	}
+
+	// Call the streaming service hooks with the EndBlock messages
+	for _, hook := range app.hooks {
+		hook.ListenEndBlock(app.deliverState.ctx, req, res)
 	}
 
 	return res
@@ -263,16 +273,28 @@ func (app *BaseApp) DeliverTx(req abci.RequestDeliverTx) abci.ResponseDeliverTx 
 	gInfo, result, err := app.runTx(runTxModeDeliver, req.Tx)
 	if err != nil {
 		resultStr = "failed"
-		return sdkerrors.ResponseDeliverTx(err, gInfo.GasWanted, gInfo.GasUsed, app.trace)
+		res := sdkerrors.ResponseDeliverTx(err, gInfo.GasWanted, gInfo.GasUsed, app.trace)
+		// If we throw and error, be sure to still call the streaming service's hook
+		for _, hook := range app.hooks {
+			hook.ListenDeliverTx(app.deliverState.ctx, req, res)
+		}
+		return res
 	}
 
-	return abci.ResponseDeliverTx{
+	res := abci.ResponseDeliverTx{
 		GasWanted: int64(gInfo.GasWanted), // TODO: Should type accept unsigned ints?
 		GasUsed:   int64(gInfo.GasUsed),   // TODO: Should type accept unsigned ints?
 		Log:       result.Log,
 		Data:      result.Data,
 		Events:    sdk.MarkEventsToIndex(result.Events, app.indexEvents),
 	}
+
+	// Call the streaming service hooks with the DeliverTx messages
+	for _, hook := range app.hooks {
+		hook.ListenDeliverTx(app.deliverState.ctx, req, res)
+	}
+
+	return res
 }
 
 // Commit implements the ABCI interface. It will commit all state that exists in
