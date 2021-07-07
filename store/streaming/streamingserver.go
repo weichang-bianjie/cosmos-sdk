@@ -73,7 +73,6 @@ func (fss *FileStreamingService) Listeners() map[sdk.StoreKey][]listen.WriteList
 }
 
 func (fss *FileStreamingService) ListenBeginBlock(ctx sdk.Context, req abci.RequestBeginBlock, res abci.ResponseBeginBlock) {
-	panic("implement me")
 	// NOTE: this could either be done synchronously or asynchronously
 	// create a new file with the req info according to naming schema
 	// write req to file
@@ -84,7 +83,6 @@ func (fss *FileStreamingService) ListenBeginBlock(ctx sdk.Context, req abci.Requ
 }
 
 func (fss *FileStreamingService) ListenEndBlock(ctx sdk.Context, req abci.RequestEndBlock, res abci.ResponseEndBlock) {
-	panic("implement me")
 	// NOTE: this could either be done synchronously or asynchronously
 	// create a new file with the req info according to naming schema
 	// write req to file
@@ -95,7 +93,6 @@ func (fss *FileStreamingService) ListenEndBlock(ctx sdk.Context, req abci.Reques
 }
 
 func (fss *FileStreamingService) ListenDeliverTx(ctx sdk.Context, req abci.RequestDeliverTx, res abci.ResponseDeliverTx) {
-	panic("implement me")
 	// NOTE: this could either be done synchronously or asynchronously
 	// create a new file with the req info according to naming schema
 	// NOTE: if the tx failed, handle accordingly
