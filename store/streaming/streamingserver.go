@@ -2,6 +2,7 @@ package streaming
 
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 	listen "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -106,6 +107,8 @@ func (fss *FileStreamingService) ListenDeliverTx(ctx sdk.Context, req abci.Reque
 // NewFileStreamingService creates a new FileStreamingService for the provided writeDir, (optional) filePrefix, and storeKeys
 func NewFileStreamingService(writeDir, filePrefix string, storeKeys []sdk.StoreKey) StreamingService {
 	var m codec.BinaryCodec
+	interfaceRegistry := types.NewInterfaceRegistry()
+	m = codec.NewProtoCodec(interfaceRegistry)
 	listenChan := make(chan []byte, 0)
 	iw := NewIntermediateWriter(listenChan)
 	listener := listen.NewStoreKVPairWriteListener(iw, m)
