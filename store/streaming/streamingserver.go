@@ -1,12 +1,16 @@
 package streaming
 
 import (
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	listen "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -47,6 +51,7 @@ func (iw *intermediateWriter) Write(b []byte) (int, error) {
 type FileStreamingService struct {
 	listeners  map[sdk.StoreKey][]listen.WriteListener // the listeners that will be initialized with BaseApp
 	srcChan    <-chan []byte                           // the channel that all of the WriteListeners write their data out to
+	txCache    []string                                // the cache that write tx out to
 	filePrefix string                                  // optional prefix for each of the generated files
 	writeDir   string                                  // directory to write files into
 	dstFile    *os.File                                // the current write output file
@@ -74,6 +79,10 @@ func (fss *FileStreamingService) Listeners() map[sdk.StoreKey][]listen.WriteList
 }
 
 func (fss *FileStreamingService) ListenBeginBlock(ctx sdk.Context, req abci.RequestBeginBlock, res abci.ResponseBeginBlock) {
+	if strings.Contains(fss.filePrefix, "_") {
+		fss.filePrefix = fss.filePrefix[:strings.Index(fss.filePrefix, "_")]
+	}
+	fss.filePrefix = fmt.Sprint(fss.filePrefix, "_", req.Header.Height)
 	// NOTE: this could either be done synchronously or asynchronously
 	// create a new file with the req info according to naming schema
 	// write req to file
@@ -91,6 +100,19 @@ func (fss *FileStreamingService) ListenEndBlock(ctx sdk.Context, req abci.Reques
 	// reset cache
 	// write res to file
 	// close file
+	if len(fss.txCache) > 0 {
+		filename := fmt.Sprint(fss.writeDir, "/", fss.filePrefix, "_txs")
+		file, err := os.Create(filename)
+		if err != nil {
+			ctx.Logger().Error(err.Error())
+			return
+		}
+
+		file.Write([]byte(strings.Join(fss.txCache, "\n")))
+		file.Close()
+		fss.txCache = make([]string, 0)
+	}
+
 }
 
 func (fss *FileStreamingService) ListenDeliverTx(ctx sdk.Context, req abci.RequestDeliverTx, res abci.ResponseDeliverTx) {
@@ -102,6 +124,18 @@ func (fss *FileStreamingService) ListenDeliverTx(ctx sdk.Context, req abci.Reque
 	// reset cache
 	// write res to file
 	// close file
+
+	type DeliverTx struct {
+		Tx       string                 `json:"tx"`
+		TxResult abci.ResponseDeliverTx `json:"tx_result"`
+	}
+
+	data, _ := json.Marshal(DeliverTx{
+		Tx:       hex.EncodeToString(req.Tx),
+		TxResult: res,
+	})
+	fss.txCache = append(fss.txCache, string(data))
+
 }
 
 // NewFileStreamingService creates a new FileStreamingService for the provided writeDir, (optional) filePrefix, and storeKeys
@@ -129,6 +163,7 @@ func NewFileStreamingService(writeDir, filePrefix string, storeKeys []sdk.StoreK
 		filePrefix: filePrefix,
 		writeDir:   writeDir,
 		marshaller: m,
+		txCache:    make([]string, 0),
 		stateCache: make([][]byte, 0),
 	}
 }
