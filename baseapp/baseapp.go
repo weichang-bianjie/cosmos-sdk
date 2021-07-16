@@ -128,6 +128,14 @@ type BaseApp struct { // nolint: maligned
 	// indexEvents defines the set of events in the form {eventType}.{attributeKey},
 	// which informs Tendermint what to index. If empty, all events will be indexed.
 	indexEvents map[string]struct{}
+	hooks       []Hook
+}
+
+// Hook interface used to hook into the ABCI message processing of the BaseApp
+type Hook interface {
+	ListenBeginBlock(ctx sdk.Context, req abci.RequestBeginBlock, res abci.ResponseBeginBlock) // update the streaming service with the latest BeginBlock messages
+	ListenEndBlock(ctx sdk.Context, req abci.RequestEndBlock, res abci.ResponseEndBlock)       // update the steaming service with the latest EndBlock messages
+	ListenDeliverTx(ctx sdk.Context, req abci.RequestDeliverTx, res abci.ResponseDeliverTx)    // update the steaming service with the latest DeliverTx messages
 }
 
 // NewBaseApp returns a reference to an initialized BaseApp. It accepts a
@@ -748,4 +756,11 @@ func (app *BaseApp) runMsgs(ctx sdk.Context, msgs []sdk.Msg, mode runTxMode) (*s
 		Log:    strings.TrimSpace(msgLogs.String()),
 		Events: events.ToABCIEvents(),
 	}, nil
+}
+
+// RegisterHooks is used to register a streaming service with the BaseApp
+func (app *BaseApp) RegisterHooks(s Hook) {
+	// register the service hooks within the BaseApp
+	// BaseApp will pass BeginBlock, DeliverTx, and EndBlock requests and responses to the streaming services to update their ABCI context using these hooks
+	app.hooks = append(app.hooks, s)
 }
